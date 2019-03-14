@@ -1,0 +1,35 @@
+kind: Deployment
+apiVersion: apps/v1beta1
+metadata:
+  name: db-wrapper
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: db-wrapper
+        version: v1
+#      annotations:
+#        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+      - name: db-wrapper
+        image: registry.ng.bluemix.net/journeys/db-wrapper-mp2:1
+        imagePullPolicy: Always
+      imagePullSecrets:
+      - name: ibm-journey
+      restartPolicy: Always
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: db-wrapper
+  labels:
+    app: db-wrapper
+spec:
+  selector:
+    app: db-wrapper
+  ports:
+    - port: 9080
+      name: http
+
