@@ -2,6 +2,8 @@ kind: Deployment
 apiVersion: apps/v1beta1
 metadata:
   name: maker-bot
+  labels:
+    app: maker-bot
 spec:
   replicas: 1
   template:
@@ -14,10 +16,11 @@ spec:
     spec:
       containers:
       - name: maker-bot
-        image: registry.ng.bluemix.net/journeys/maker-bot-mp2:1
+        image: ykoyfman/maker-bot-mp2
         imagePullPolicy: Always
-      imagePullSecrets:
-      - name: ibm-journey
+        env:
+        - name: PERSIST_URL
+          value: "http://dbwrapper:9080/dbwrapper/resources/persist"
       restartPolicy: Always
 ---
 kind: Service
@@ -32,26 +35,3 @@ spec:
   ports:
     - port: 9080
       name: http
----
-kind: Ingress
-apiVersion: extensions/v1beta1
-metadata:
-  name: maker-bot
-  annotations:
-    kubernetes.io/ingress.class: istio
-spec:
-  rules:
-  - http:
-      paths:
-      - path: /maker-bot/jobs
-        backend:
-          serviceName: maker-bot
-          servicePort: 9080
-      - path: /maker-bot/resources
-        backend:
-          serviceName: maker-bot
-          servicePort: 9080
-      - path: /maker-bot/health
-        backend:
-          serviceName: maker-bot
-          servicePort: 9080

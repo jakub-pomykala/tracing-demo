@@ -15,6 +15,7 @@ public class JobsResource {
 
     @Inject
     MakerBot makerBot;
+    String reqId;
 
     @POST
     public void createJob(JsonObject jsonObject, @Context HttpServletRequest request) {
@@ -24,7 +25,7 @@ public class JobsResource {
         if (instrument == null)
             throw new BadRequestException();
 
-        makerBot.print(instrument);
+        makerBot.print(instrument, reqId);
     }
 
     private void logHeaders(HttpServletRequest request) {
@@ -32,6 +33,9 @@ public class JobsResource {
         while (headerNames.hasMoreElements()) {
             String header = headerNames.nextElement();
             System.out.println(header + ": " + request.getHeader(header));
+			if(header.equals("x-request-id")) {
+				reqId = request.getHeader(header);
+			}
         }
         System.out.println();
     }

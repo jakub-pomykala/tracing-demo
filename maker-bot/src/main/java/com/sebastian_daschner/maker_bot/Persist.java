@@ -24,8 +24,10 @@ public class Persist {
                 .connectTimeout(2, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
                 .build();
-        
-        target = client.target("http://dbwrapper:9080/dbwrapper/resources/persist");
+        // Use URL in environment
+        String url = System.getenv("PERSIST_URL");
+        System.out.println ("Using persistence URL from environment: " + url);
+        target = client.target(url);
     }
 
     public void persistInstrument(String instrument, String reqId) {
