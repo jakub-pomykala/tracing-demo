@@ -46,8 +46,8 @@ public class MakerBot {
         try {
             Response r = null;
             while (instrument_count>0) {
-                System.out.println(instrument_count + " instruments left to print.");
-                r = target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
+                System.out.println(instrument_count + " instruments left to print. Setting parent to: " + parentspan);
+                r = target.request().header("x-b3-parentspanid", parentspan).header("x-request-id", reqId).post(Entity.json(requestBody));
                 instrument_count--;
             }
             return r;
