@@ -51,13 +51,6 @@ public class MakerBot {
                 instrument_count--;
             }
             return r;
-            // System.out.println("Sending request with x-b3-parentspanid: " + parentspan);
-            //System.out.println("Sending x-request-id only: " + reqId);
-            //target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
-//            return target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
-//            return target.request().post(Entity.json(requestBody));
-            //System.out.println("Making another guitar");
-            // return target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
 
         } catch (Exception e) {
             throw new IllegalStateException("Could not print instrument, reason: " + e.getMessage(), e);

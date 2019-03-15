@@ -1,4 +1,4 @@
-package com.ibm.journeys.db_wrapper;
+package com.ibm.journeys.dbwrapper;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
