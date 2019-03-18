@@ -19,4 +19,6 @@
         <user>admin</user>
     </administrator-role>
 
+    <logging traceSpecification="com.ibm.ws.jaxrs*=all:org.apache.cxf.*=all:com.ibm.ws.opentracing.*=all:com.ibm.ws.microprofile.opentracing.*=all" />
+
 </server>

@@ -26,8 +26,10 @@ public class MakerBot {
                 .connectTimeout(2, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
                 .build();
-        
-        target = client.target("http://maker-bot:9080/maker-bot/resources/jobs");
+                String url = System.getenv("MAKER_URL");
+                System.out.println ("Using persistence URL from environment: " + url);
+                target = client.target(url);
+//target = client.target("http://maker-bot:9080/maker-bot/resources/jobs");
     }
 
     public void printInstrument(InstrumentType type, String reqId, String parentspan, int instrument_count) {

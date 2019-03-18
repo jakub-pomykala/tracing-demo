@@ -6,7 +6,7 @@
      <feature>usr:opentracingZipkin-0.31</feature>
     </featureManager>
 
-    <httpEndpoint id="defaultHttpEndpoint" host="*" httpPort="9080" httpsPort="9443"/>
+    <httpEndpoint id="defaultHttpEndpoint" host="*" httpPort="9081" httpsPort="9443"/>
 
     <keyStore id="defaultKeyStore" password="Liberty"/>
 
@@ -18,5 +18,7 @@
     <administrator-role>
         <user>admin</user>
     </administrator-role>
+
+    <logging traceSpecification="com.ibm.ws.jaxrs*=all:org.apache.cxf.*=all:com.ibm.ws.opentracing.*=all:com.ibm.ws.microprofile.opentracing.*=all" />
 
 </server>
