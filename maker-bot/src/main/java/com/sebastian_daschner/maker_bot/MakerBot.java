@@ -23,6 +23,7 @@ public class MakerBot {
         catch (Exception e) {}
 
         System.out.println("Printing a " + instrument + " after sleeping for " + millis + " ms");
+
         persist.persistInstrument(instrument, reqId);
     }
 

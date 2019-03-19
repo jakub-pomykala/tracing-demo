@@ -16,7 +16,11 @@ import java.util.concurrent.TimeUnit;
 public class Persist {
 
     private Client client;
-    private WebTarget target;
+    private WebTarget target_persist;
+    private WebTarget target_pipeline;
+
+    String pipeline_url;
+    String persist_url;
 
     @PostConstruct
     private void initClient() {
@@ -25,15 +29,16 @@ public class Persist {
                 .readTimeout(5, TimeUnit.SECONDS)
                 .build();
         // Use URL in environment
-        String url = System.getenv("PERSIST_URL");
-        System.out.println ("Using persistence URL from environment: " + url);
-        target = client.target(url);
+        pipeline_url = System.getenv("PIPELINE_URL");
+        persist_url = System.getenv("PERSIST_URL");
+        System.out.println ("Using persistence and pipeline URLs from environment: " + persist_url + " : " + pipeline_url);
+        target_persist = client.target(persist_url);
+        target_pipeline = client.target(pipeline_url);
     }
 
     public void persistInstrument(String instrument, String reqId) {
         JsonObject requestBody = createRequestBody();
-        Response response = sendRequest(requestBody, reqId);
-        validateResponse(response);
+        sendRequest(requestBody, reqId);
     }
 
     private JsonObject createRequestBody() {
@@ -42,21 +47,22 @@ public class Persist {
                 .build();
     }
 
-    private Response sendRequest(JsonObject requestBody, String reqId) {
-        try {
-            Response r = null;
-            System.out.println("Saving instrument to database");
-            r = target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
-            return r;
+    private void sendRequest(JsonObject requestBody, String reqId) {
 
+        try {
+            System.out.println("Kicking off processing pipeline");
+            target_pipeline.request().header("x-request-id", reqId).post(Entity.json(requestBody));
         } catch (Exception e) {
             throw new IllegalStateException("Could not save instrument, reason: " + e.getMessage(), e);
         }
-    }
 
-    private void validateResponse(Response response) {
-        if (response.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL)
-            throw new IllegalStateException("Could not save instrument, status: " + response.getStatus());
+        try {
+            System.out.println("Saving instrument to database");
+            target_persist.request().header("x-request-id", reqId).post(Entity.json(requestBody));
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not save instrument, reason: " + e.getMessage(), e);
+        }
+        
     }
 
     @PreDestroy
