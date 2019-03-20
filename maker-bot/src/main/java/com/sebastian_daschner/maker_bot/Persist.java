@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 @ApplicationScoped
 public class Persist {
 
-    private Client client;
+    private Client client, pipeClient;
     private WebTarget target_persist;
     private WebTarget target_pipeline;
 
@@ -28,12 +28,17 @@ public class Persist {
                 .connectTimeout(2, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
                 .build();
+        pipeClient = ClientBuilder.newBuilder()
+                .connectTimeout(2, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .build();
+        
         // Use URL in environment
         pipeline_url = System.getenv("PIPELINE_URL");
         persist_url = System.getenv("PERSIST_URL");
         System.out.println ("Using persistence and pipeline URLs from environment: " + persist_url + " : " + pipeline_url);
         target_persist = client.target(persist_url);
-        target_pipeline = client.target(pipeline_url);
+        target_pipeline = pipeClient.target(pipeline_url);
     }
 
     public void persistInstrument(String instrument, String reqId) {
@@ -55,6 +60,7 @@ public class Persist {
         } catch (Exception e) {
             throw new IllegalStateException("Could not instantiate pipeline, reason: " + e.getMessage(), e);
         }
+        
 
         try {
             System.out.println("Saving instrument to database");
@@ -68,5 +74,6 @@ public class Persist {
     @PreDestroy
     private void closeClient() {
         client.close();
+        pipeClient.close();
     }
 }

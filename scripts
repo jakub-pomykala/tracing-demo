@@ -1,0 +1,6 @@
+curl 169.55.65.202:31380/instrument-craft-shop/resources/instruments -i -XPOST -H 'Content-Type: application/json' -d '{"type":"GUITAR", "price":200}'
+# Persisting Instrument_type_goes_here to data store.
+Calling pipeline node: http://pipeline-2:9080/pipeline-node/resources/process
+[WARNING ] Interceptor for {http://pipeline-2:9080/pipeline-node/resources/process}WebClient has thrown exception, unwinding now
+IllegalStateException invoking http://pipeline-2:9080/pipeline-node/resources/process: Already connected
+

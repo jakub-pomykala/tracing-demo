@@ -22,7 +22,7 @@ spec:
         - name: PERSIST_URL
           value: "http://dbwrapper:9080/dbwrapper/resources/persist"
         - name: PIPELINE_URL
-          value: "http://pipeline-n1:9080/pipeline/resources/transform"
+          value: "http://pipeline-n1:9080/pipeline-node/resources/process"
       restartPolicy: Always
 ---
 kind: Service

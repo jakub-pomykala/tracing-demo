@@ -25,9 +25,8 @@ public class PipelineResource {
 
         long millis = (long) (Math.random() * 1000);
 
-        // Simulate potentially wrong running call to database.
         // TODO: why not also simulate failures here?
-        System.out.println("Persisting " + instrument + " to data store.");
+        System.out.println(instrument + " processing pipeline.");
         try  {
             Thread.sleep(millis);
         }
