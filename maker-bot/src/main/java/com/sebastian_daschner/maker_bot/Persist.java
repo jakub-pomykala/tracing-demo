@@ -53,7 +53,7 @@ public class Persist {
             System.out.println("Kicking off processing pipeline");
             target_pipeline.request().header("x-request-id", reqId).post(Entity.json(requestBody));
         } catch (Exception e) {
-            throw new IllegalStateException("Could not save instrument, reason: " + e.getMessage(), e);
+            throw new IllegalStateException("Could not instantiate pipeline, reason: " + e.getMessage(), e);
         }
 
         try {
