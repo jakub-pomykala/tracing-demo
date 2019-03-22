@@ -4,3 +4,4 @@ Calling pipeline node: http://pipeline-2:9080/pipeline-node/resources/process
 [WARNING ] Interceptor for {http://pipeline-2:9080/pipeline-node/resources/process}WebClient has thrown exception, unwinding now
 IllegalStateException invoking http://pipeline-2:9080/pipeline-node/resources/process: Already connected
 
+kubectl delete -f maker-bot/deployment/maker-bot-mp2.yaml  -f instrument-craft-shop/deployment/instrument-craft-shop-mp2.yaml -f pipeline/deployment

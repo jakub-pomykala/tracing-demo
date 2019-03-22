@@ -11,6 +11,7 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Response;
 import java.util.concurrent.TimeUnit;
+import javax.inject.Inject;
 
 @ApplicationScoped
 public class Persist {
@@ -53,18 +54,12 @@ public class Persist {
     }
 
     private void sendRequest(JsonObject requestBody, String reqId) {
-
-        try {
-            System.out.println("Kicking off processing pipeline");
-            target_pipeline.request().header("x-request-id", reqId).post(Entity.json(requestBody));
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not instantiate pipeline, reason: " + e.getMessage(), e);
-        }
+        System.out.println("Kicking off processing pipeline");
+        target_pipeline.request().post(Entity.json(requestBody));
         
-
         try {
             System.out.println("Saving instrument to database");
-            target_persist.request().header("x-request-id", reqId).post(Entity.json(requestBody));
+            target_persist.request().post(Entity.json(requestBody));
         } catch (Exception e) {
             throw new IllegalStateException("Could not save instrument, reason: " + e.getMessage(), e);
         }

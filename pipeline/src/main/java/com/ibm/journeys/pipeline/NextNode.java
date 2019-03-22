@@ -13,7 +13,7 @@ import javax.ws.rs.core.Response;
 import java.util.concurrent.TimeUnit;
 
 @ApplicationScoped
-public class Transform {
+public class NextNode {
 
     private Client client;
     private WebTarget target;
@@ -27,11 +27,16 @@ public class Transform {
                 .build();
         // Use URL in environment
         url = System.getenv("NEXT_STEP_URL");
-        System.out.println ("Using URL from environment: " + url);
-        target = client.target(url);
+        System.out.println ("Using pipeline URL from environment: " + url);
+        if (url==null || !url.contains("http")) {
+            System.out.println("Final processing step.");
+            target = null;
+        } else {
+            target = client.target(url);
+        }
     }
 
-    public void transform(String instrument, String reqId) {
+    public void nextStep(String instrument, String reqId) {
         JsonObject requestBody = createRequestBody();
         Response response = sendRequest(requestBody, reqId);
         validateResponse(response);
@@ -44,15 +49,14 @@ public class Transform {
     }
 
     private Response sendRequest(JsonObject requestBody, String reqId) {
-        try {
+        if (target != null) {
             Response r = null;
             System.out.println("Calling pipeline node: " + url);
-            r = target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
+            r = target.request().post(Entity.json(requestBody));
             return r;
-
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not invoke pipeline node, reason: " + e.getMessage(), e);
         }
+
+        return Response.ok("All done").build();
     }
 
     private void validateResponse(Response response) {

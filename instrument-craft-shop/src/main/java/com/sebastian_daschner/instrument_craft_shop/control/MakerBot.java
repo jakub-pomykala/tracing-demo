@@ -43,18 +43,13 @@ public class MakerBot {
     }
 
     private Response sendRequest(JsonObject requestBody, String reqId, String parentspan, int instrument_count) {
-        try {
             Response r = null;
             while (instrument_count>0) {
                 System.out.println(instrument_count + " instruments left to print.");
-                r = target.request().header("x-request-id", reqId).post(Entity.json(requestBody));
+                 r = target.request().post(Entity.json(requestBody));
                 instrument_count--;
             }
             return r;
-
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not print instrument, reason: " + e.getMessage(), e);
-        }
     }
 
     private void validateResponse(Response response) {

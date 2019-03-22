@@ -1,15 +1,15 @@
 kind: Deployment
 apiVersion: apps/v1beta1
 metadata:
-  name: pipeline-n1
+  name: pipeline-n3
   labels:
-    app: pipeline-n1
+    app: pipeline-n3
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        app: pipeline-n1
+        app: pipeline-n3
         version: v1
     spec:
       containers:
@@ -18,20 +18,20 @@ spec:
         imagePullPolicy: Always
         env:
         - name: NEXT_STEP_URL
-          value: "http://pipeline-n2:9080/pipeline-node/resources/process"
+          value: ""
         - name: WORK_TIME
-          value: "10"
+          value: "15"
       restartPolicy: Always
 ---
 kind: Service
 apiVersion: v1
 metadata:
-  name: pipeline-n1
+  name: pipeline-n3
   labels:
-    app: pipeline-n1
+    app: pipeline-n3
 spec:
   selector:
-    app: pipeline-n1
+    app: pipeline-n3
   ports:
     - port: 9080
       name: http

@@ -19,6 +19,8 @@ spec:
         env:
         - name: NEXT_STEP_URL
           value: "http://pipeline-n3:9080/pipeline-node/resources/process"
+        - name: WORK_TIME
+          value: "5"
       restartPolicy: Always
 ---
 kind: Service

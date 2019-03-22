@@ -13,7 +13,7 @@ import javax.inject.Inject;
 public class PipelineResource {
 
 	@Inject
-    Transform tx;
+    ProcessData process;
     String reqId;
 	
     @POST
@@ -31,9 +31,7 @@ public class PipelineResource {
             Thread.sleep(millis);
         }
         catch (Exception e) {}
-
-		tx.transform(instrument, reqId);
-
+        process.Process(instrument, reqId);
     }
 
     private void logHeaders(HttpServletRequest request) {
