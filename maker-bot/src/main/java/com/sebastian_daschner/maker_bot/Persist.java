@@ -11,7 +11,6 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Response;
 import java.util.concurrent.TimeUnit;
-import javax.inject.Inject;
 
 @ApplicationScoped
 public class Persist {
@@ -25,17 +24,24 @@ public class Persist {
 
     @PostConstruct
     private void initClient() {
+        int timeout = Integer.parseInt(System.getenv("READ_TIMEOUT"));
+        System.out.println ("Read timeout: " + timeout);
+
         client = ClientBuilder.newBuilder()
                 .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(timeout, TimeUnit.SECONDS)
                 .build();
+        
         pipeClient = ClientBuilder.newBuilder()
                 .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(timeout, TimeUnit.SECONDS)
                 .build();
         
         // Use URL in environment
         pipeline_url = System.getenv("PIPELINE_URL");
+        if (Math.random() < 0.4) {
+            pipeline_url += "/work";
+        }
         persist_url = System.getenv("PERSIST_URL");
         System.out.println ("Using persistence and pipeline URLs from environment: " + persist_url + " : " + pipeline_url);
         target_persist = client.target(persist_url);
@@ -55,16 +61,30 @@ public class Persist {
 
     private void sendRequest(JsonObject requestBody, String reqId) {
         System.out.println("Kicking off processing pipeline");
-        target_pipeline.request().post(Entity.json(requestBody));
-        
+        Response r;
+        try {
+            r = target_pipeline.request().post(Entity.json(requestBody));
+            validateResponse(r);
+        } catch (Exception e) {
+            throw e;
+        }
+        System.out.println("Recieved pipeline status: " + r.getStatus());
+        if ( ! String.valueOf(r.getStatus()).startsWith("2") ) {
+            System.out.println("Pipeline processing error");
+        }
         try {
             System.out.println("Saving instrument to database");
-            target_persist.request().post(Entity.json(requestBody));
+            r = target_persist.request().post(Entity.json(requestBody));
+            validateResponse(r);
         } catch (Exception e) {
             throw new IllegalStateException("Could not save instrument, reason: " + e.getMessage(), e);
         }
-        
     }
+
+    private void validateResponse(Response response) {
+        if (response.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL)
+            throw new IllegalStateException("Could not perform request, status: " + response.getStatus());
+    }    
 
     @PreDestroy
     private void closeClient() {

@@ -10,6 +10,9 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.Response;
+
+import jdk.nashorn.internal.runtime.JSONFunctions;
+
 import java.util.concurrent.TimeUnit;
 
 @ApplicationScoped
@@ -36,9 +39,8 @@ public class NextNode {
         }
     }
 
-    public void nextStep(String instrument, String reqId) {
-        JsonObject requestBody = createRequestBody();
-        Response response = sendRequest(requestBody, reqId);
+    public void nextStep(JsonObject requestBody) {
+        Response response = sendRequest(requestBody);
         validateResponse(response);
     }
 
@@ -48,7 +50,7 @@ public class NextNode {
                 .build();
     }
 
-    private Response sendRequest(JsonObject requestBody, String reqId) {
+    private Response sendRequest(JsonObject requestBody) {
         if (target != null) {
             Response r = null;
             System.out.println("Calling pipeline node: " + url);

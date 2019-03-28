@@ -24,7 +24,7 @@ public class MakerBot {
     private void initClient() {
         client = ClientBuilder.newBuilder()
                 .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
                 .build();
         
         target = client.target("http://maker-bot:9080/maker-bot/resources/jobs");
@@ -47,6 +47,7 @@ public class MakerBot {
             while (instrument_count>0) {
                 System.out.println(instrument_count + " instruments left to print.");
                  r = target.request().post(Entity.json(requestBody));
+                 validateResponse(r);
                 instrument_count--;
             }
             return r;

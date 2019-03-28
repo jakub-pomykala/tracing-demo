@@ -23,6 +23,8 @@ spec:
           value: "http://dbwrapper:9080/dbwrapper/resources/persist"
         - name: PIPELINE_URL
           value: "http://pipeline-n1:9080/pipeline-node/resources/process"
+        - name: READ_TIMEOUT
+          value: "30"
       restartPolicy: Always
 ---
 kind: Service
