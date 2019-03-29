@@ -24,7 +24,7 @@ spec:
         - name: PIPELINE_URL
           value: "http://pipeline-n1:9080/pipeline-node/resources/process"
         - name: READ_TIMEOUT
-          value: "30"
+          value: "60"
       restartPolicy: Always
 ---
 kind: Service

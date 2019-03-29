@@ -39,13 +39,9 @@ public class Persist {
         
         // Use URL in environment
         pipeline_url = System.getenv("PIPELINE_URL");
-        if (Math.random() < 0.4) {
-            pipeline_url += "/work";
-        }
         persist_url = System.getenv("PERSIST_URL");
         System.out.println ("Using persistence and pipeline URLs from environment: " + persist_url + " : " + pipeline_url);
         target_persist = client.target(persist_url);
-        target_pipeline = pipeClient.target(pipeline_url);
     }
 
     public void persistInstrument(String instrument, String reqId) {
@@ -60,7 +56,15 @@ public class Persist {
     }
 
     private void sendRequest(JsonObject requestBody, String reqId) {
-        System.out.println("Kicking off processing pipeline");
+        
+        if (Math.random() < 0.2) {
+            System.out.println("Kicking off processing pipeline to: " + pipeline_url + "/work"); 
+            target_pipeline = pipeClient.target(pipeline_url + "/work");
+        } else {
+            System.out.println("Kicking off processing pipeline to: " + pipeline_url); 
+            target_pipeline = pipeClient.target(pipeline_url);
+        }
+
         Response r;
         try {
             r = target_pipeline.request().post(Entity.json(requestBody));
@@ -87,7 +91,7 @@ public class Persist {
     }    
 
     @PreDestroy
-    private void closeClient() {
+    private void closeClient() { 
         client.close();
         pipeClient.close();
     }

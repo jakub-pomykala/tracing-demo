@@ -26,7 +26,7 @@ public class NextNode {
     private void initClient() {
         client = ClientBuilder.newBuilder()
                 .connectTimeout(2, TimeUnit.SECONDS)
-                .readTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
                 .build();
         // Use URL in environment
         url = System.getenv("NEXT_STEP_URL");
