@@ -14,9 +14,42 @@ The movement toward microservice architectures has grown hand in hand with the g
 - [Jaeger](https://www.jaegertracing.io/)
 
 # Prerequisite
-Create a Kubernetes cluster with either [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube) for local testing, with [IBM Cloud Private](https://github.com/IBM/deploy-ibm-cloud-private/blob/master/README.md), or with [IBM Cloud Kubernetes Service](https://console.ng.bluemix.net/docs/containers/cs_ov.html#cs_ov) to deploy in cloud. The code here is regularly tested against IBM Cloud Kubernetes Service using Travis.
+Create a Kubernetes cluster with either [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube) for local testing or with [IBM Cloud Kubernetes Service](https://console.ng.bluemix.net/docs/containers/cs_ov.html#cs_ov) to deploy in cloud. Once your cluster is up, install [Helm](https://helm.sh/docs/using_helm/), which is required for Istio installation.
 
-Create a working directory to clone this repo and to download Istio into:
+# Setup
+
+Let's install the Istio service mesh installed on top of your Kubernetes cluster. 
+
+```bash
+$ curl -L https://git.io/getLatestIstio | sh -
+$ mv istio-<version> istio # replace with version downloaded
+$ kubectl create namespace istio-system
+$ kubectl apply -f install/kubernetes/helm/helm-service-account.yaml
+$ helm init --service-account tiller
+```
+
+When installing Istio, you are able install either a [Jaeger](https://www.jaegertracing.io/) or [Zipkin](https://zipkin.io/) tracing back-end. Most of the steps are the same with either service:
+
+To install with a Jaeger back-end, run:
+
+```
+helm install kubernetes/helm/istio --name istio --namespace istio-system  --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true
+```
+
+for Zipkin:
+
+```
+helm install kubernetes/helm/istio --name istio --namespace istio-system  --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set tracing.provider=zipkin
+```
+
+
+Accessing the tracing dashboards:
+
+
+- Clone and check out the sample application:
+
+
+Create a working directory to clone this repo and to download Istio into: (note: will be moved to this repository after review)
 
 ```bash
 $ mkdir ibm
@@ -24,17 +57,9 @@ $ cd ibm
 $ git clone https://github.com/IBM/opentracing-istio-troubleshooting 
 ```
 
-You will also need Istio service mesh installed on top of your Kubernetes cluster.
-Here are the steps (Make sure to change the version to your downloaded one):
+Run the deployment scripts. The Docker images for this pattern are already uploaded to Docker hub. 
 
-```bash
-$ curl -L https://git.io/getLatestIstio | sh -
-$ mv istio-<version> istio # replace with version downloaded
-$ export PATH=$PWD/istio/bin:$PATH
-$ kubectl apply -f istio/install/kubernetes/istio-demo.yaml
-
-```
-
+Note: need section on rebuilding Liberty services code/images and pushing custom images to your Docker hub repo.
 
 Istio mesh promises to add observability to the complex task of microservice deployments. Although Istio simplifies some aspects, the added function is not completely "free" in the sense that, as we'll see,
 an application inside the mesh does need to do some extra work to propagage request context through the mesh. However, OpenTracing support in Open Liberty reduces the cost of providing a mesh-wide view of distributed tracing. 
@@ -108,22 +133,129 @@ Without a tracing library, headers in the Node service need to be copied from in
       });
 ```
 
-When viewed in Jaeger or Zipkin, the Node service is still visible among the Java applications, since the Envoy side-car is able to report the traceid to the collector, which will place it in context of other services. The headers are available in the Node service thanks mpOpenTracing, which automatically instruments HTTP calls made with the JAX-RS client. Every time a network call is made, these headers must be propogated, either manually or through a library that wraps network calls.
+When viewed in Jaeger or Zipkin, the Node service is still visible among the Java applications, since the traceid is consistent with trace IDs propogated by JAX-RS/mpOpenTracing, allowing it to be placed in context of other services. Every time a network call is made, these headers must be propogated, either manually or through a library that wraps network calls.
 
-OpenLiberty changes to enable context propagation:
+OpenLiberty changes to build OpenLiberty Docker containers that enable trace propagation:
 
-- server.xml
-- Dockerfile
-- pom.xml
+In the server.xml file, add these two features.  microProfile-2.1 includes JAX-RS and mpOpenTracing, among others.  The Zipkin feature provides support for Zipkin compatible trace collector.  The `opentracingZipkin` 
 
-Any code making REST calls will automatically have spans recorded.
+```
+   <featureManager>
+      <feature>microProfile-2.1</feature>
+     <feature>usr:opentracingZipkin-0.31</feature>
+    </featureManager>
+
+    <opentracingZipkin host="zipkin.istio-system" port="9411" />
+
+```
+
+In the Dockerfile, we are copying the `lib` directory that includes the zipkin user feature downloaded by Maven:
+
+```
+COPY target/liberty/wlp/usr/extension /opt/ol/wlp/usr/extension/
+```
+
+These sections in the `pom.xml` are necessary to download the zipkin user feature (see the full `pom.xml` here: [link to github])
+
+```
+    <properties>
+        <zipkin.usr.feature>https://github.com/WASdev/sample.opentracing.zipkintracer/releases/download/1.2/liberty-opentracing-zipkintracer-1.2-sample.zip</zipkin.usr.feature>
+    </properties>
+```
+
+And the plugin to download the user feature:
+
+```
+        <plugin>
+          <groupId>com.googlecode.maven-download-plugin</groupId>
+          <artifactId>download-maven-plugin</artifactId>
+          <version>${version.download-maven-plugin}</version>
+          <executions>
+            <execution>
+              <id>install-tracer</id>
+              <phase>prepare-package</phase>
+              <goals>
+                <goal>wget</goal>
+              </goals>
+              <configuration>
+                <url>${zipkin.usr.feature}</url>
+                <unpack>true</unpack>
+                <outputDirectory>${project.build.directory}/liberty/wlp/usr</outputDirectory>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+```
+
+Using the JAX-RS client library - `javax.ws.rs.client.Client` and related classes - create new spans within the collector, in addition to preserving trace id header across calls.
 
 # Load testing with Artillery
 
+We'll use Artillery (http://artillery.io) `$ npm install -g artillery`, a service load testing tool to drive many requests to our cluster. Once the run is complete, we can examine the distributed tracing dashboard to understand.
 
 
+```
+$ artillery run load-test.yml 
 
-# Failure scenarios that we'll explore with distributed tracing
+All virtual users finished
+Summary report @ 14:59:53(-0400) 2019-04-04
+  Scenarios launched:  28
+  Scenarios completed: 28
+  Requests completed:  28
+  RPS sent: 0.82
+  Request latency:
+    min: 747.1
+    max: 25311.3
+    median: 8253.1
+    p95: 24145.1
+    p99: 25311.3
+  Scenario counts:
+    build instrument: 28 (100%)
+  Codes:
+    204: 20
+    500: 8
+
+```
+
+This launched 28 requests over the course of 10 seconds. Looks like our built-in failure clauses impacted one of the services 20 times. A snapshot shows how long each request took, and we can even examine the outliers by clicking on them (red arrow).
+
+![arch](images/macimg/artillery-result1.png)
+
+The result shows us that the `pipeline-n1` process had an extremely long runtime, ultimately resulting in a network timeout upstream:
+
+![arch](images/macimg/timeout1.png)
+
+Upstream timeout.  Note the `Logs` is available due to JAX-RS instrumentation through OpenLiberty tracing instrumentation, which is not available directly through Envoy.
+
+![arch](images/macimg/timeout2.png)
+
+If we follow the `x-request-id` value from the envoy trace entry for that process, we can use that to locate the specific invcation of this request. 
+
+![arch](images/macimg/timeout3.png)
+
+Normally, you would want to aggregate your logs in a central location [link to Cloud LogDNA service here] but for the purpose of our demo, we can see the request is taking 19370ms, causing a connection error in the top level `maker-bot` service, which has client connections set to timeout after 20 seconds.
+
+```
+
+$ kubectl logs pipeline-n1-694c45bb8b-8nlns pipeline-node | grep -C6 aefd6fa9-635b-9a83-895a-c5f3e3d14225
+Accept: */*
+User-Agent: Apache-CXF/3.3.0
+Cache-Control: no-cache
+Pragma: no-cache
+Content-Length: 42
+X-Forwarded-Proto: http
+x-request-id: aefd6fa9-635b-9a83-895a-c5f3e3d14225
+x-envoy-decorator-operation: pipeline-n1.default.svc.cluster.local:9080/*
+x-istio-attributes: Cj8KCnNvdXJjZS51aWQSMRIva3ViZXJuZXRlczovL21ha2VyLWJvdC02NGZmYmM3YzY1LXp6ZzVqLmRlZmF1bHQKPgoTZGVzdGluYXRpb24uc2VydmljZRInEiVwaXBlbGluZS1uMS5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsCkEKF2Rlc3RpbmF0aW9uLnNlcnZpY2UudWlkEiYSJGlzdGlvOi8vZGVmYXVsdC9zZXJ2aWNlcy9waXBlbGluZS1uMQpDChhkZXN0aW5hdGlvbi5zZXJ2aWNlLmhvc3QSJxIlcGlwZWxpbmUtbjEuZGVmYXVsdC5zdmMuY2x1c3Rlci5sb2NhbAoqCh1kZXN0aW5hdGlvbi5zZXJ2aWNlLm5hbWVzcGFjZRIJEgdkZWZhdWx0CikKGGRlc3RpbmF0aW9uLnNlcnZpY2UubmFtZRINEgtwaXBlbGluZS1uMQ==
+doWork process time = 19370 ms
+[err]   at javax.servlet.http.HttpServlet.service(HttpServlet.java:706)
+[err]   at com.ibm.websphere.jaxrs.server.IBMRestServlet.service(IBMRestServlet.java:96)
+[err]   at [internal classes]
+```
+
+With the help of distributed tracing, the entire process of finding the longest running request and identifying its error took seconds.
+
+# Failure scenarios that can be discovered explore with distributed tracing
 
 - Slow performance
 - network timeouts
@@ -166,10 +298,6 @@ system as some services just don't appear.  In this case, a pipeline node did no
 
 ![4041](images/macimg/404-service-not-started-1.png)
 ![4041](images/macimg/404-service-not-started-2a.png)
-
-
-
-
 
 # Steps
 
