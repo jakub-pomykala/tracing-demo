@@ -21,36 +21,22 @@ app.use(function(req, res, next) {
 
 app.post('/process_js', function(req, res) {
 
-    var traceid = req.headers["x-b3-traceid"];
-    var spanid = req.headers["x-b3-spanid"];
-    var sampled = req.headers["x-b3-sampled"];
-    var parent = req.headers["x-b3-parentspanid"];
-    
-    if ( traceid ) {
-	console.log("Got traceid: " + traceid);
-    }
-
-    if ( spanid ) {
-	console.log("Got spanid: " + spanid);
-    }
-
-    if ( sampled ) {
-	console.log("Got sampled: " + sampled);
-    }
-
-    if ( parent ) {
-	console.log("Got parent id: " + parent);
-    }
+    var b3headers = ["x-b3-traceid",
+                     "x-b3-spanid",
+                     "x-b3-sampled",
+                     "x-b3-parentspanid"];
+    axios.defaults.headers.post = {};
+    b3headers.forEach(function(hdr) {
+        console.log(hdr);
+        var value = req.headers[hdr];
+        if (value) {
+            console.log("Copying " + hdr + "=" + value + " to POST header.")
+            axios.defaults.headers.post[hdr] = value;
+        }
+      });
     
     console.log('Running JS pipeline process');
-
     var path  = process.env.NEXT_STEP_URL;
-
-    axios.defaults.headers.post["x-b3-traceid"] = traceid;
-    axios.defaults.headers.post["x-b3-parentspanid"] = parent;
-    axios.defaults.headers.post["x-b3-sampled"] = sampled;
-    axios.defaults.headers.post["x-b3-spanid"] = spanid;
-
     axios.post(path,{}).then((response) => {
 	logger.debug("Finished pipeline call");
 
@@ -60,8 +46,6 @@ app.post('/process_js', function(req, res) {
 	console.log(response.headers);
 	console.log(response.config);
 
-	
-	
 	res.send(JSON.stringify({
 	    outcome: "success"
 	}, null, 3));

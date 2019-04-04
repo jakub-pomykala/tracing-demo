@@ -91,26 +91,32 @@ Heading over to the dashboard, we'll see a trace that looks like this. Notice th
 
 # Microprofile Open Tracing vs. manual context propogation:
 
-Note that the Node service can participate in the trace due to sevarl factors:
+Without a tracing library, headers in the Node service need to be copied from input to output to maintain the unified trace context:
 
-- It's deployed in a pod with an Envoy sidecar that proxies all traffic into and out of the Node container 
-- Envoy understands the tracing headers and ultimately reports this activity to a Zipkin-compatible trace collector
-- the developer of the service saves the HTTP headers and copies them to the output
-- mpOpenTracing JAX-RS REST client integration automatically propogates the traceid.
 
 ```javascript
-    var traceid = req.headers["x-b3-traceid"];
-    var spanid  = req.headers["x-b3-spanid"];
-    var sampled = req.headers["x-b3-sampled"];
-    var parent  = req.headers["x-b3-parentspanid"];
-
-	axios.defaults.headers.post["x-b3-traceid"] = traceid;
-    axios.defaults.headers.post["x-b3-parentspanid"] = parent;
-    axios.defaults.headers.post["x-b3-sampled"] = sampled;
-    axios.defaults.headers.post["x-b3-spanid"] = spanid;
+    var b3headers = ["x-b3-traceid",
+	                 "x-b3-spanid",
+					 "x-b3-sampled",
+					 "x-b3-parentspanid"];
+    axios.defaults.headers.post = {};
+    b3headers.forEach(function(hdr) {
+        var value = req.headers[hdr];
+        if (value) {
+            axios.defaults.headers.post[hdr] = value;
+        }
+      });
 ```
 
-The key factor to understand here is that every single time a network call is made, these headers must be carried along. In a large enough system, unless this instrumentation is added automatically, it's impossible to expect perfect compliance with this requirement, leading to gaps in what can be observed.
+When viewed in Jaeger or Zipkin, the Node service is still visible among the Java applications, since the Envoy side-car is able to report the traceid to the collector, which will place it in context of other services. The headers are available in the Node service thanks mpOpenTracing, which automatically instruments HTTP calls made with the JAX-RS client. Every time a network call is made, these headers must be propogated, either manually or through a library that wraps network calls.
+
+OpenLiberty changes to enable context propagation:
+
+- server.xml
+- Dockerfile
+- pom.xml
+
+Any code making REST calls will automatically have spans recorded.
 
 # Load testing with Artillery
 
