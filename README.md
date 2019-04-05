@@ -3,10 +3,43 @@
 
 # Use Distributed Tracing and OpenTracing in Istio to aid in microsorvice deployment troubleshooting
 
-The movement toward microservice architectures has grown hand in hand with the growth of the public cloud. The two trends work together to allow organizations to neatly divide functionality. This helps with scale software function and engineering teams, as individual functions can be built and deployed independently into a container orchesteration system that manages many infrastructure issues with relative ease. 
+# Introduction
 
+The shift toward distributed, container-based [microservice architectures](https://developer.ibm.com/articles/why-should-we-use-microservices-and-containers/) brings with it a host of advantages but also some drawbacks. While Kubernetes makes it easier than ever to split up monoliths into multiple, smaller services that use multiple network requests to complete every transaction, engineers and operations teams face challenges in observability, problem determination and root cause analysis. 
 
-[Istio](https://istio.io/), a joint collaboration between IBM, Google and Lyft provides an easy way to create a service mesh that will manage many of these complex tasks automatically, without the need to modify the microservices themselves. Istio does this by:
+[Istio](https://istio.io/), a joint effort between IBM, Google and Lyft adds the concept of a [service mesh](https://github.com/IBM/microservices-traffic-management-using-istio) that can be integrated into a container orchestration platform like Kubernetes.  The set of technologies provided by Istio to enhance observability, developers applications do need to be aware of new requirements to take advantage of new capabilities. 
+
+In this pattern we'll look at how Open Liberty, Microprofile and Open Tracing work alongside Istio supports the concept of distributed tracing, a way to capture, visualize and tell the story of what happens to an individual request as ping-pongs its way a connected set of services. An application inside the mesh does need to do some extra work to propagage request context through the mesh. However, OpenTracing support in Open Liberty reduces the cost of providing a mesh-wide view of distributed tracing. 
+
+It allows basic support for distributed tracing without making any code changes. As a baseline, Istio must be installed with tracing enabled and, for the purposes of this demo, the sampling frequencing will be increased from the default 1% to something higher so we can see more frequent traces. The question here is, what do we learn without touching the code? 
+
+One of the perhaps confusing areas of Istio is whether and how much an application has to be changed to advantage of the distributed tracing support.  If you install the standard "Bookinfo" application, you will find that requests are traced and visible in Zipkin or Jaeger.  However, each part of the app (links here) has code to capture and propagate context across calls to enable linking of calls along requests (Documentation)  https://istio.io/docs/tasks/telemetry/distributed-tracing/#understanding-what-happened. As you will notice in the Bookinfo app, manually handling context propagation for the purposes of tracing is tedious, and more importantly, it's easy to make an omission and leave the headers out of a REST call, creating gaps in the trace record. This is where Liberty microprofile comes in. When using JAX-RS REST client alongside microprofile OpenTracing, all context propagation is handled automatically. Developers of new services don't have any need for custom trace propagation code.  Global automatic propogation removes the opportunity for a deveoloper to forget to include instrumentation, thus causing gaps in the tracing data.
+
+In this pattern we walk through a way to do distributed tracing in a multi-service application most of the microservices are running OpenLiberty with Microprofile, a set of technologies intended to simplfy cloud-native deployments. We add a Node microservice not using OpenTracing to illustrate how the Istio mesh enhances observability in a polyglot environment and as an interesting contrast with OpenLiberty's code-free instrumentation of RPCs.  The sample application is extremely simple and has the smallest amount of code possible to demonstrate distributed tracing in the context of a service mesh. In a few places the application will throw synthetic exceptions to give us something to look for in the trace data. There is also simulated delay of operations to force some respoinses to take longer than others.  I want to emphasize that the app does not do any actual processing.
+
+We'll walk through the process of these steps:
+
+- Installing Istio, enabling tracing and providing access to a dashboard
+- Add Microprofile and OpenTracing to OpenLiberty project.
+- Run a simple microservice based application and explore a distributed tracing UI
+- Investigate application failures using information from distributed tracing.
+
+# Architecture
+
+The sample app is made up of six services, shown below. The app is intended to be as simple as possible to demonstrate some features of distributed tracing without getting bogged down by details of its functionality; it's an expanded fork of this [demonstration app](https://github.com/sdaschner/instrument-craft-shop) from Sebastian Daschner.
+
+![arch](images/macimg/diag3.png)
+
+After a user sends a POST call into the ingress gateway public IP address, that request flows through the sample app as follows:
+
+1. The Istio ingress gateway forwards the request to the service registered under the `instrumennt-craft-shop` name.
+2. The `instrumennt-craft-shop` service calls to the `maker-bot` service, which then:
+3. kicks off the "processing pipeline", which consists of four steps, each running in a separate pod.
+4. the `maker-bot` service waits for the entire pipeline to complete.
+5. If the pipeline completes, the final step in the sequence is a call from the `maker-bot` to the `dbwrapper` service, which, in a real service could persist the object to a database, but in our case sleeps for a short period of time before returning a response.
+
+The processing pipeline represents any service with multiple steps (e.g. ETL workflow) to allow us to show the value of using distributed tracing in such an architecture. The sample app does not actually do any data processing, of course, since it exists to create a source of (occasional) error conditions that we can view in a trace.   Anyone who has worked with an architecture that could remotely be described as microservice will be familiar with the experience of seeing failure or sub-optimal performance and wondering what the root cause could be.  For simplicity, the service flow is synchronous. 
+
 
 ## Included Components
 - [Istio](https://istio.io/)
@@ -42,12 +75,21 @@ for Zipkin:
 helm install kubernetes/helm/istio --name istio --namespace istio-system  --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set tracing.provider=zipkin
 ```
 
-
 Accessing the tracing dashboards:
 
+- Jaeger
+```
+kubectl port-forward -n istio-system $(kubectl get pod -n istio-system -l app=jaeger -o jsonpath={.items[0].metadata.name}) 16686:16686 &
+```
+and go to http://localhost:16686
 
-- Clone and check out the sample application:
-
+- For Zipkin (if `tracing.provider=zipkin` was used) run:
+```
+ kubectl port-forward -n istio-system $(kubectl get pod -n istio-system -l app=zipkin -o jsonpath={.items[0].metadata.name}) 9411:9411 &
+ ```
+ and access the dashboard at http://localhost:9411
+ 
+- Clone and check out the sample application.
 
 Create a working directory to clone this repo and to download Istio into: (note: will be moved to this repository after review)
 
@@ -59,45 +101,41 @@ $ git clone https://github.com/IBM/opentracing-istio-troubleshooting
 
 Run the deployment scripts. The Docker images for this pattern are already uploaded to Docker hub. 
 
-Note: need section on rebuilding Liberty services code/images and pushing custom images to your Docker hub repo.
+```
+$ ./deploy.sh
+service/instrument-craft-shop unchanged
+deployment.apps/instrument-craft-shop created
+deployment.apps/maker-bot created
+service/maker-bot unchanged
+deployment.apps/dbwrapper created
+service/dbwrapper unchanged
+deployment.apps/pipeline-n1 created
+service/pipeline-n1 unchanged
+deployment.apps/pipeline-n2 created
+service/pipeline-n2 unchanged
+deployment.apps/pipeline-n3 created
+service/pipeline-n3 unchanged
+deployment.apps/pipeline-js created
+service/pipeline-js unchanged
+gateway.networking.istio.io/shop-gw created
+virtualservice.networking.istio.io/craft-shop-svc created
+```
 
-Istio mesh promises to add observability to the complex task of microservice deployments. Although Istio simplifies some aspects, the added function is not completely "free" in the sense that, as we'll see,
-an application inside the mesh does need to do some extra work to propagage request context through the mesh. However, OpenTracing support in Open Liberty reduces the cost of providing a mesh-wide view of distributed tracing. 
-It allows basic support for distributed tracing without making any code changes. As a baseline, Istio must be installed with tracing enabled and, for the purposes of this demo, the sampling frequencing will be increased from the default 1% to something higher so we can see more frequent traces. The question here is, what do we learn without touching the code? 
+Verify pods are running (each pod should have 2 containers)
 
-One of the perhaps confusing areas of Istio is whether and how much an application has to be changed to advantage of the distributed tracing support.  If you install the standard "Bookinfo" application, you will find that requests are traced and visible in Zipkin or Jaeger.  However, each part of the app (links here) has code to capture and propagate context across calls to enable linking of calls along requests (Documentation)  https://istio.io/docs/tasks/telemetry/distributed-tracing/#understanding-what-happened. As you will notice in the Bookinfo app, manually handling context propagation for the purposes of tracing is tedious, and more importantly, it's easy to make an omission and leave the headers out of a REST call, creating gaps in the trace record. This is where Liberty microprofile comes in. When using JAX-RS REST client alongside microprofile OpenTracing, all context propagation is handled automatically. Developers of new services don't have any need for custom trace propagation code.  Global automatic propogation removes the opportunity for a deveoloper to forget to include instrumentation, thus causing gaps in the tracing data.
+```
+$   kubectl get pods
+NAME                                     READY   STATUS    RESTARTS   AGE
+dbwrapper-7cbffb64fd-s9djp               2/2     Running   0          2m
+instrument-craft-shop-86f8bbcb97-jn7xh   2/2     Running   0          2m
+maker-bot-64ffbc7c65-pp9sr               2/2     Running   0          2m
+pipeline-js-57c4dcd475-9bbcp             2/2     Running   0          31s
+pipeline-n1-694c45bb8b-mkdgz             2/2     Running   0          2m
+pipeline-n2-77b8d95b49-d7b5m             2/2     Running   0          2m
+pipeline-n3-7dd8976ddb-rnwk8             2/2     Running   0          2m
+```
 
-In this pattern we walk through a way to do distributed tracing in a multi-service application most of the microservices are running OpenLiberty with Microprofile, a set of technologies intended to simplfy cloud-native deployments. We add a Node microservice not using OpenTracing to illustrate how the Istio mesh enhances observability in a polyglot environment and as an interesting contrast with OpenLiberty's code-free instrumentation of RPCs.  The sample application is extremely simple and has the smallest amount of code possible to demonstrate distributed tracing in the context of a service mesh. In a few places the application will throw synthetic exceptions to give us something to look for in the trace data. There is also simulated delay of operations to force some respoinses to take longer than others.  I want to emphasize that the app does not do any actual processing.
-
-We'll walk through the process of these steps:
-
-- Installing Istio with tracing enabled
-- Add OpenTracing features on an OpenLiberty project
-- run a simple microservice based application and explore what we can learn from distributed tracing UI (Jaeger)
-- inject several different kinds of failures into the application and use distributed tracing to investigate the root cause.
-
-# Architecture
-
-The app is made up of six services:
-
-
-![arch](images/macimg/diag3.png)
-
-After a user sends a POST call into the ingress gateway public IP address, that request flows through the sample app as follows:
-
-1. The Istio ingress gateway forwards the request to the service registered under the `instrumennt-craft-shop` name.
-2. The `instrumennt-craft-shop` service calls to the `maker-bot` service, which then:
-3. kicks off the "processing pipeline", which consists of four steps, each running in a separate pod.
-4. the `maker-bot` service waits for the entire pipeline to complete.
-5. If the pipeline completes, the final step in the sequence is a call from the `maker-bot` to the `dbwrapper` service, which, in a real service could persist the object to a database, but in our case sleeps for a short period of time before returning a response.
-
-The processing pipeline represents any service with multiple steps (e.g. ETL workflow) to allow us to show the value of using distributed tracing in such an architecture. The sample app does not actually do any data processing, of course, since it exists to create a source of (occasional) error conditions that we can view in a trace.   Anyone who has worked with an architecture that could remotely be described as microservice will be familiar with the experience of seeing failure or sub-optimal performance and wondering what the root cause could be.  For simplicity, the service flow is synchronous. 
-
-# Green path through application - no errors
-
-Let's take a look at one succesfull request.
-
-First, let's get the external IP and port of the ingress gateway:
+Once services are running, find the `istio-ingressgateway` service external IP and port:
 
 ```
 $  kubectl get svc -n istio-system istio-ingressgateway
@@ -105,10 +143,19 @@ NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)  
 istio-ingressgateway   LoadBalancer   172.21.158.107   169.55.65.202   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15011:31315/TCP,8060:31977/TCP,853:31762/TCP,15030:30709/TCP,15031:31912/TCP   26d
 ```
 
+
+Note: need section on rebuilding Liberty services code/images and pushing custom images to your Docker hub repo.
+
+# Green path through application - no errors
+
+Let's take a look at one succesfull request.
+
+First, let's get the external IP and port of the ingress gateway:
+
+
 Then, we'll make a single REST call to our service via the ingress IP/port:
 
 `curl 169.55.65.202:31380/instrument-craft-shop/resources/instruments -i -XPOST -H 'count: 1'  -H 'Content-Type: application/json' -d '{"type":"GUITAR", "price":200}'`
-
 
 Heading over to the dashboard, we'll see a trace that looks like this. Notice that we see the total time for the request (3.5s) and have separate spans for work done in each service.  Because both Microprofile OpenTracing and the Envoy proxy (sidecar container) are sending traces to the collector, spans for both show up and are nearly identical in length, as the proxy adds very little latency to each call. (Since the JAX-RS integration with Microprofile OpenTracing propogates the `x-b3-traceid` header value across network calls, the trace collector is able to combine information from both services.  This is also the reason our Node service (`pipeline-js` in the diagram here) is made part of this collection: even though it's not using an OpenTracing (or any tracing library) for that matter, we're able to see the request to the Node service in the flow of the due to the mpOpenTracing automatically propogating HTTP headers across calls. 
 
