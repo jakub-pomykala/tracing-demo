@@ -1,45 +1,44 @@
 [![Build Status](https://travis-ci.org/IBM/troubleshoot-with-opentracing-and-istio.svg?branch=master)](https://travis-ci.org/IBM/troubleshoot-with-openrtracing-and-istio)
 
 
-# Use Distributed Tracing and OpenTracing in Istio to aid in microsorvice deployment troubleshooting
+# Use Microprofile OpenTracing and distributed tracing with Istio to enhance system observability.
 
 # Introduction
 
-The shift toward distributed, container-based [microservice architectures](https://developer.ibm.com/articles/why-should-we-use-microservices-and-containers/) brings with it a host of advantages but also some drawbacks. While Kubernetes makes it easier than ever to split up monoliths into multiple, smaller services that use multiple network requests to complete every transaction, engineers and operations teams face challenges in observability, problem determination and root cause analysis. 
+The shift toward distributed, container-based [microservice architectures](https://developer.ibm.com/articles/why-should-we-use-microservices-and-containers/) brings with it a number of advantages but also drawbacks. While Kubernetes makes it easier than ever to split up monoliths into multiple, smaller services that use multiple network requests to complete every transaction, engineers and operations teams face challenges in observability, problem determination and root cause analysis. 
 
-[Istio](https://istio.io/), a joint effort between IBM, Google and Lyft adds the concept of a [service mesh](https://github.com/IBM/microservices-traffic-management-using-istio) that can be integrated into a container orchestration platform like Kubernetes.  The set of technologies provided by Istio to enhance observability, developers applications do need to be aware of new requirements to take advantage of new capabilities. 
+[Istio](https://istio.io/), a joint effort between IBM, Google and Lyft creates a [service mesh](https://github.com/IBM/microservices-traffic-management-using-istio) that can be integrated into a container orchestration platform like Kubernetes.  While the set of technologies provided by Istio promises to enhance system observability, developers should be aware of new requirements to take advantage of these capabilities. 
 
-In this pattern we'll look at how Open Liberty, Microprofile and Open Tracing work alongside Istio supports the concept of distributed tracing, a way to capture, visualize and tell the story of what happens to an individual request as ping-pongs its way a connected set of services. An application inside the mesh does need to do some extra work to propagage request context through the mesh. However, OpenTracing support in Open Liberty reduces the cost of providing a mesh-wide view of distributed tracing. 
+In this pattern we'll look at how Open Liberty, Microprofile and Open Tracing work alongside Istio and introduce the concept of distributed tracing, a way to capture, visualize and tell the story of what happens to an individual request. An application inside the mesh does need to do some extra work to propagate request context through the mesh. Open Liberty reduces the effort require to instrumenting code to allow services to take advantage of distributed tracing.
 
-It allows basic support for distributed tracing without making any code changes. As a baseline, Istio must be installed with tracing enabled and, for the purposes of this demo, the sampling frequencing will be increased from the default 1% to something higher so we can see more frequent traces. The question here is, what do we learn without touching the code? 
+# Tracing with Istio
 
-One of the perhaps confusing areas of Istio is whether and how much an application has to be changed to advantage of the distributed tracing support.  If you install the standard "Bookinfo" application, you will find that requests are traced and visible in Zipkin or Jaeger.  However, each part of the app (links here) has code to capture and propagate context across calls to enable linking of calls along requests (Documentation)  https://istio.io/docs/tasks/telemetry/distributed-tracing/#understanding-what-happened. As you will notice in the Bookinfo app, manually handling context propagation for the purposes of tracing is tedious, and more importantly, it's easy to make an omission and leave the headers out of a REST call, creating gaps in the trace record. This is where Liberty microprofile comes in. When using JAX-RS REST client alongside microprofile OpenTracing, all context propagation is handled automatically. Developers of new services don't have any need for custom trace propagation code.  Global automatic propogation removes the opportunity for a deveoloper to forget to include instrumentation, thus causing gaps in the tracing data.
+One of the perhaps confusing areas of Istio is whether and how much an application has to be changed to advantage of the distributed tracing support.  If you install the standard "Bookinfo" application, you will find that requests are traced and visible in Zipkin or Jaeger.  However, each service has code to [capture and propagate](https://github.com/istio/istio/blob/master/samples/bookinfo/src/details/details.rb#L130-L148) tracing headers. [(See documentation here)](https://istio.io/docs/tasks/telemetry/distributed-tracing/#understanding-what-happened). Manually handling context propagation is error prone, tedious and runs the risk creating gaps in the trace record. This is where Open Liberty and Microprofile can help. When using the JAX-RS REST client alongside Microprofile OpenTracing, spans and request errors are sent to the trace collector, and header-based trace ID propagation is handled automatically.
 
-In this pattern we walk through a way to do distributed tracing in a multi-service application most of the microservices are running OpenLiberty with Microprofile, a set of technologies intended to simplfy cloud-native deployments. We add a Node microservice not using OpenTracing to illustrate how the Istio mesh enhances observability in a polyglot environment and as an interesting contrast with OpenLiberty's code-free instrumentation of RPCs.  The sample application is extremely simple and has the smallest amount of code possible to demonstrate distributed tracing in the context of a service mesh. In a few places the application will throw synthetic exceptions to give us something to look for in the trace data. There is also simulated delay of operations to force some respoinses to take longer than others.  I want to emphasize that the app does not do any actual processing.
+Along with deploying Open Liberty based containers, we also add a Node microservice not using any tracing library. This will demonstrate how to take advantage of Envoy and its understanding of tracing headers to connect its function to the broader request context. 
 
-We'll walk through the process of these steps:
+In this pattern, we'll go through these steps:
 
-- Installing Istio, enabling tracing and providing access to a dashboard
-- Add Microprofile and OpenTracing to OpenLiberty project.
-- Run a simple microservice based application and explore a distributed tracing UI
-- Investigate application failures using information from distributed tracing.
+1. Installing Istio, enabling tracing and providing access to a dashboard.
+2. Add Microprofile and OpenTracing to OpenLiberty project.
+3. Run a simple microservice based application and explore a distributed tracing UI.
+4. Investigate application failures using information from distributed tracing.
 
 # Architecture
 
-The sample app is made up of six services, shown below. The app is intended to be as simple as possible to demonstrate some features of distributed tracing without getting bogged down by details of its functionality; it's an expanded fork of this [demonstration app](https://github.com/sdaschner/instrument-craft-shop) from Sebastian Daschner.
+The sample app deployed here, a modified version of the [instrument-craft-shop](https://github.com/sdaschner/instrument-craft-shop) demo app from Sebastian Daschner, simulates an interface to a manufacturing facility. The details of the internals are less important than simply showing an application whose function is distributed across several microservices.
+
+The sample app is made up of six services, shown below. The app is intended to be as simple as possible to demonstrate some features of distributed tracing without getting bogged down by details of its functionality. Some of the services will throw exceptions at random times to simulate failures that give us a chance to explore distributed tracing features.
 
 ![arch](images/macimg/diag3.png)
 
 After a user sends a POST call into the ingress gateway public IP address, that request flows through the sample app as follows:
 
-1. The Istio ingress gateway forwards the request to the service registered under the `instrumennt-craft-shop` name.
-2. The `instrumennt-craft-shop` service calls to the `maker-bot` service, which then:
+1. The Istio ingress gateway forwards the request to the service registered under the `instrument-craft-shop` name.
+2. The `instrument-craft-shop` service calls to the `maker-bot` service, which then:
 3. kicks off the "processing pipeline", which consists of four steps, each running in a separate pod.
 4. the `maker-bot` service waits for the entire pipeline to complete.
-5. If the pipeline completes, the final step in the sequence is a call from the `maker-bot` to the `dbwrapper` service, which, in a real service could persist the object to a database, but in our case sleeps for a short period of time before returning a response.
-
-The processing pipeline represents any service with multiple steps (e.g. ETL workflow) to allow us to show the value of using distributed tracing in such an architecture. The sample app does not actually do any data processing, of course, since it exists to create a source of (occasional) error conditions that we can view in a trace.   Anyone who has worked with an architecture that could remotely be described as microservice will be familiar with the experience of seeing failure or sub-optimal performance and wondering what the root cause could be.  For simplicity, the service flow is synchronous. 
-
+5. If the pipeline completes, the final step in the sequence is a call from the `maker-bot` to the `dbwrapper` service which, in a real service could persist the object to a database, but in our case sleeps for a short period of time before returning a response.
 
 ## Included Components
 - [Istio](https://istio.io/)
@@ -75,9 +74,32 @@ for Zipkin:
 helm install kubernetes/helm/istio --name istio --namespace istio-system  --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set tracing.provider=zipkin
 ```
 
-Accessing the tracing dashboards:
+- Enable automatic sidecar injection and increase trace sampling frequency.
 
-- Jaeger
+Verify that the envoy side car is added to each deployed pod:
+
+```
+$ kubectl label namespace default istio-injection=enabled --overwrite
+$ kubectl get namespace -L istio-injection
+NAME             STATUS   AGE   ISTIO-INJECTION
+default          Active   1d    enabled
+```
+
+By default the sampling frequency tracing is 1%. This is suitable for services where very high request volume would create too much noise in the tracing data. For our purposes, we can set it to 100% to allow all requests to be traced.
+
+Run this command to edit the Istio pilot settings:
+`$ kubectl -n istio-system edit deploy istio-pilot`
+
+Find the parameter `PILOT_TRACE_SAMPLING`, set its value to 100 and save the changes.
+
+```
+       - name: PILOT_TRACE_SAMPLING
+          value: "100"
+```
+
+Finally, set up port forwarding to access the tracing UI on your system:
+
+- If Istio is installed with Jaeger:
 ```
 kubectl port-forward -n istio-system $(kubectl get pod -n istio-system -l app=jaeger -o jsonpath={.items[0].metadata.name}) 16686:16686 &
 ```
@@ -89,7 +111,7 @@ and go to http://localhost:16686
  ```
  and access the dashboard at http://localhost:9411
  
-- Clone and check out the sample application.
+- Clone the sample application.
 
 Create a working directory to clone this repo and to download Istio into: (note: will be moved to this repository after review)
 
@@ -143,28 +165,23 @@ NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)  
 istio-ingressgateway   LoadBalancer   172.21.158.107   169.55.65.202   80:31380/TCP,443:31390/TCP,31400:31400/TCP,15011:31315/TCP,8060:31977/TCP,853:31762/TCP,15030:30709/TCP,15031:31912/TCP   26d
 ```
 
+In this cluster, the external address is `169.55.65.202:31380`.   A request to the application can be sent with curl:
 
-Note: need section on rebuilding Liberty services code/images and pushing custom images to your Docker hub repo.
+```
+curl 169.55.65.202:31380/instrument-craft-shop/resources/instruments -i -XPOST -H 'count: 1'  -H 'Content-Type: application/json' -d '{"type":"GUITAR", "price":200}'
+```
 
-# Green path through application - no errors
+Without application instrumentation
+--------------
 
-Let's take a look at one succesfull request.
+Before we look at what we get with distributed tracing enabled, here's a screenshot from the tracing UI with Istio installed but *without* any application-level context propagation. (Open Tracing/zipkin configuration removed from Open Liberty and no manual header duplication.) Envoy reports each HTTP call to the trace collector but it creates new trace IDs for every span, so there's no way for the trace subsystem to link them into one request.
 
-First, let's get the external IP and port of the ingress gateway:
+![notrace](images/macimg/zipkin-notrace-indivspan.png)
 
 
-Then, we'll make a single REST call to our service via the ingress IP/port:
+# Microprofile Open Tracing vs. manual context propagation.
 
-`curl 169.55.65.202:31380/instrument-craft-shop/resources/instruments -i -XPOST -H 'count: 1'  -H 'Content-Type: application/json' -d '{"type":"GUITAR", "price":200}'`
-
-Heading over to the dashboard, we'll see a trace that looks like this. Notice that we see the total time for the request (3.5s) and have separate spans for work done in each service.  Because both Microprofile OpenTracing and the Envoy proxy (sidecar container) are sending traces to the collector, spans for both show up and are nearly identical in length, as the proxy adds very little latency to each call. (Since the JAX-RS integration with Microprofile OpenTracing propogates the `x-b3-traceid` header value across network calls, the trace collector is able to combine information from both services.  This is also the reason our Node service (`pipeline-js` in the diagram here) is made part of this collection: even though it's not using an OpenTracing (or any tracing library) for that matter, we're able to see the request to the Node service in the flow of the due to the mpOpenTracing automatically propogating HTTP headers across calls. 
-
-![arch](images/macimg/full-span-no-error.png)
-
-# Microprofile Open Tracing vs. manual context propogation:
-
-Without a tracing library, headers in the Node service need to be copied from input to output to maintain the unified trace context:
-
+First, let's take a look at how context propagation is done manually.  Without a tracing library, headers in the Node service need to be copied from input to output to maintain the unified trace context:
 
 ```javascript
     var b3headers = ["x-b3-traceid",
@@ -180,11 +197,23 @@ Without a tracing library, headers in the Node service need to be copied from in
       });
 ```
 
-When viewed in Jaeger or Zipkin, the Node service is still visible among the Java applications, since the traceid is consistent with trace IDs propogated by JAX-RS/mpOpenTracing, allowing it to be placed in context of other services. Every time a network call is made, these headers must be propogated, either manually or through a library that wraps network calls.
+When viewed in Jaeger or Zipkin, the Node service is still visible among the Java applications, since the traceid is consistent with trace IDs propagated by JAX-RS/mpOpenTracing, allowing it to be placed in context of other services. Every time a network call is made, these headers must be propagated, either manually or through a library that wraps network calls.
 
-OpenLiberty changes to build OpenLiberty Docker containers that enable trace propagation:
+# OpenLiberty changes to build OpenLiberty Docker containers that enable trace propagation.
 
-In the server.xml file, add these two features.  microProfile-2.1 includes JAX-RS and mpOpenTracing, among others.  The Zipkin feature provides support for Zipkin compatible trace collector.  The `opentracingZipkin` 
+On the OpenLiberty side, we're configuring trace reporting by modifying configuration in `server.xml`. Note that there are no changes in the Java code needed.  Since all REST calls use the JAX-RS client library - `javax.ws.rs.client.Client` and associated classes - new trace spans are sent to the trace collector during each call. The `x-b3-traceid` header is also preserved across calls, allowing non-Liberty services to be part of a unified trace.
+
+1. Changes in `server.xml`
+
+We add the `microProfile-2.1`, which brings in the entire suite of Microprofile features, including JAX-RS and mpOpenTracing.  The Zipkin feature provides support for Zipkin compatible trace collector.  With the `opentracingZipkin` parameter, we point Liberty to the tracing collector in Istio. This address is valid for either a Zipkin or Jaeger based Istio installation, as Jaeger natively supports the Zipkin tracing format, and Istio maps its collector address to `zipkin.istio-system:9411`.  This address can be found by checking the startup arguments in any envoy proxy deployment:
+
+```
+$ kubectl describe pod maker-bot-64ffbc7c65-pp9sr | grep -A1 zipkinAddress
+      --zipkinAddress
+      zipkin.istio-system:9411
+```
+
+- server.xml:
 
 ```
    <featureManager>
@@ -196,11 +225,15 @@ In the server.xml file, add these two features.  microProfile-2.1 includes JAX-R
 
 ```
 
+2. Changes in the Dockerfile
+
 In the Dockerfile, we are copying the `lib` directory that includes the zipkin user feature downloaded by Maven:
 
 ```
 COPY target/liberty/wlp/usr/extension /opt/ol/wlp/usr/extension/
 ```
+
+3. Changes in `pom.xml`
 
 These sections in the `pom.xml` are necessary to download the zipkin user feature (see the full `pom.xml` here: [link to github])
 
@@ -234,14 +267,28 @@ And the plugin to download the user feature:
         </plugin>
 ```
 
-Using the JAX-RS client library - `javax.ws.rs.client.Client` and related classes - create new spans within the collector, in addition to preserving trace id header across calls.
 
-# Load testing with Artillery
+Test Scenario: Normal request processing
+------------------------
 
-We'll use Artillery (http://artillery.io) `$ npm install -g artillery`, a service load testing tool to drive many requests to our cluster. Once the run is complete, we can examine the distributed tracing dashboard to understand.
+Let's take a look at one successful request.
+
+Then, we'll make a single REST call to our service via the ingress IP/port found earlier:
+
+`curl 169.55.65.202:31380/instrument-craft-shop/resources/instruments -i -XPOST -H 'count: 1'  -H 'Content-Type: application/json' -d '{"type":"GUITAR", "price":200}'`
+
+Heading over to the dashboard, we'll see a trace that looks like this. Notice that we see the total time for the request (3.5s) and have separate spans for work done in each service.  Because both Microprofile OpenTracing and the Envoy proxy (sidecar container) are sending traces to the collector, spans for both show up and are nearly identical in length, as the proxy adds very little latency to each call. (Since the JAX-RS integration with Microprofile OpenTracing propagates the `x-b3-traceid` header value across network calls, the trace collector is able to combine information from both services.  This is also the reason our Node service (`pipeline-js` in the diagram here) is made part of this collection: even though it's not using an OpenTracing (or any tracing library) for that matter, we're able to see the work in the Node service in the context of the larger request. 
+
+![arch](images/macimg/full-span-no-error.png)
+
+Error Scenario: Load testing and network timeout
+------------------------
+
+We'll use Artillery (http://artillery.io), a service load testing tool to drive many requests to our cluster. Once the run is complete, we can examine the distributed tracing dashboard to understand how the service behaves and examine any errors.
 
 
 ```
+$ npm install -g artillery
 $ artillery run load-test.yml 
 
 All virtual users finished
@@ -264,7 +311,7 @@ Summary report @ 14:59:53(-0400) 2019-04-04
 
 ```
 
-This launched 28 requests over the course of 10 seconds. Looks like our built-in failure clauses impacted one of the services 20 times. A snapshot shows how long each request took, and we can even examine the outliers by clicking on them (red arrow).
+This launched 28 requests over the course of 10 seconds; the application successfully completed only 8 out of the 28 requests. If we load the service in the Jaeger UI and sort by most recent traces, Jager builds a scatter plot showing at a glance how the service performed; we can examine the outliers by clicking on them (red arrow).
 
 ![arch](images/macimg/artillery-result1.png)
 
@@ -276,11 +323,11 @@ Upstream timeout.  Note the `Logs` is available due to JAX-RS instrumentation th
 
 ![arch](images/macimg/timeout2.png)
 
-If we follow the `x-request-id` value from the envoy trace entry for that process, we can use that to locate the specific invcation of this request. 
+If we follow the `x-request-id` value from the envoy trace entry for that process, we can use that to locate the specific invocation of this request. 
 
 ![arch](images/macimg/timeout3.png)
 
-Normally, you would want to aggregate your logs in a central location [link to Cloud LogDNA service here] but for the purpose of our demo, we can see the request is taking 19370ms, causing a connection error in the top level `maker-bot` service, which has client connections set to timeout after 20 seconds.
+Normally, you would want to aggregate your logs in a central location [link to Cloud LogDNA service here] but for the purpose of our demo, we can check the pod with `kubectl logs` and filter by request-id. We find it ran for 19370ms, causing a connection error in the top level `maker-bot` service, which has client connections set to timeout after 20 seconds.
 
 ```
 
@@ -300,55 +347,52 @@ doWork process time = 19370 ms
 [err]   at [internal classes]
 ```
 
-With the help of distributed tracing, the entire process of finding the longest running request and identifying its error took seconds.
+With the help of distributed tracing, the entire process of finding the longest running request and locating its logs took seconds. 
 
-# Failure scenarios that can be discovered explore with distributed tracing
+The `x-request-id` value is injected by Istio header can be forwarded as well, but if left alone can still be useful by as a way to locate individual service requests, as tracing does not record detailed error messages or stack traces.
 
-- Slow performance
-- network timeouts
-- service not started
-- incorrect URLs
-- NPE and other exceptions during operation
-
-Now, the `x-request-id` value is injected by Istio header can be forwarded as well, but if untouched I find it helpful if logging it to have a correlation id to tie into individual requests, as tracing does not record detailed error data, for that, you would need to fall back to your log aggregation service (link to LogDNA in IBM cloud)
-
-https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/tracing#arch-overview-tracing
+More details about Envoy's use of HTTP header fields can be found [here](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/tracing#arch-overview-tracing).
 
 
-Here I want to discuss a specific use case for distributed tracing. Let's take a look at a simple microservice based sample app and if we can discover problems. In the app, basd on a demo app called "instrument-craft-shop" it simulates an interface to a manufacturing facility. But the details are not important for the demonstration. The key here is that it's an application whose function is distributed across several microservices, each on running in an OpenLiberty container. 
+Note: Because the traces don't retain information about path parameters or payload bodies, separating REST operations by URL helps to identify what was going on by quickly glancing at the trace UI.
 
-
-Steps
-Installation of Istio (TBD)
-
-
-Let's run a load tester against the app and see what we can learn from the story through distributed tracing.
-
-Artillery [ link to artillery here ]
-
-Hint: Because the traces don't retain information about path parameters or payload bodies, separating REST operations by URL helps to identify what was going on by quickly glancing at the trace UI.
-
-No tracing
--------------
-
-![notrace](images/macimg/zipkin-notrace-indivspan.png)
-
-Scenarios:
------------
-
-1. Service not yet started:
+Error Scenario: misconfiguration
 ------------------------
 
-To begin with, we'll look at a relatively simple situation: service is unavailable.
-In a microservice environment, sometimes, a service isn't ready, or has failed for some purpose. Another service attempting to call this service will get an error.  This jumps out immediately in the distributed tracing
-system as some services just don't appear.  In this case, a pipeline node did not complete its startup and the web application was not ready to receive requests.  We can see it's missing from the trace entirely and if we dig deeper we find a "404" message in the maker-bot:
+To begin with, we'll look at a relatively simple situation: for some reason, a service is unavailable.
+In a microservice environment, sometimes, a service isn't ready, or has failed for some purpose. Another service attempting to call this service will get an error.  This jumps out immediately in the distributed tracing system as some spans just don't appear.  In this case, a pipeline node did not complete its startup and the web application was not ready to receive requests.  We can see it's missing from the trace entirely and if we dig deeper we find a "404" message in the maker-bot:
 
 ![4041](images/macimg/404-service-not-started-1.png)
 ![4041](images/macimg/404-service-not-started-2a.png)
 
-# Steps
+The specific error message is available due to Microprofile OpenTracing reporting the error to the trace collector.
+
+Error Scenario: run-time application failure
+--------------------------
+
+Lastly, let's take a look at a typical application error. 
+
+![index1](images/macimg/index1.png)
+
+We can see how an error in one pipeline process ripples up through the call chain so you can follow it to the initial request that triggered the sequence.
+
+![index2](images/macimg/index2.png)
+
+If we check the Envoy proxy's span one level above the JAX-RS span, we find the request-id that was injected into the HTTP header, making it possible to locate the specific Java stack trace (and more error details) in your centralized logging system.
+
+![index2](images/macimg/index3.png)
+
+# Conclusion
+
+In this pattern, we set up a Kubernetes cluster, installed the Istio service mesh, and added tracing instrumentation to our microservice application.
+
+As we saw, Istio mesh adds observability, but it's not completely "free", as applications do need to instrument their code.  We saw how OpenLiberty's Microprofile can simplify implementing end-to-end tracing across a microservice application.  A toolkit like OpenLiberty's Microprofile and JAX-RS that allows automatic span creation reduces the chance that important information is lost due to gaps in recorded traces.
+
 
 # References
 [Istio.io](https://istio.io/docs/tasks/)
+
+More about OpenLiberty and mpOpenTracing on the [official blog](https://openliberty.io/guides/microprofile-opentracing.html#getting-started)
+
 # License
 [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0)
