@@ -1,7 +1,7 @@
 [![Build Status](https://travis-ci.org/IBM/troubleshoot-with-opentracing-and-istio.svg?branch=master)](https://travis-ci.org/IBM/troubleshoot-with-openrtracing-and-istio)
 
 
-# Use Microprofile OpenTracing and distributed tracing with Istio to enhance system observability.
+# Use MicroProfile OpenTracing and distributed tracing with Istio to enhance system observability.
 
 # Introduction
 
@@ -9,18 +9,18 @@ The shift toward distributed, container-based [microservice architectures](https
 
 [Istio](https://istio.io/), a joint effort between IBM, Google and Lyft creates a [service mesh](https://github.com/IBM/microservices-traffic-management-using-istio) that can be integrated into a container orchestration platform like Kubernetes.  While the set of technologies provided by Istio promises to enhance system observability, developers should be aware of new requirements to take advantage of these capabilities. 
 
-In this pattern we'll look at how Open Liberty, Microprofile and Open Tracing work alongside Istio and introduce the concept of distributed tracing, a way to capture, visualize and tell the story of what happens to an individual request. An application inside the mesh does need to do some extra work to propagate request context through the mesh. Open Liberty reduces the effort needed to instrument code to allow services to use distributed tracing.
+In this pattern we'll look at how Open Liberty, MicroProfile and Open Tracing work alongside Istio and introduce the concept of distributed tracing, a way to capture, visualize and tell the story of what happens to an individual request. An application inside the mesh does need to do some extra work to propagate request context through the mesh. Open Liberty reduces the effort needed to instrument code to allow services to use distributed tracing.
 
 # Tracing with Istio
 
-One of the perhaps confusing areas of Istio is whether and how much an application has to be changed to take advantage of the distributed tracing support.  If you install the standard "Bookinfo" application, you will find that requests are traced and visible in Zipkin or Jaeger.  However, each service has code to [capture and propagate](https://github.com/istio/istio/blob/master/samples/bookinfo/src/details/details.rb#L130-L148) tracing headers. [(See documentation here)](https://istio.io/docs/tasks/telemetry/distributed-tracing/#understanding-what-happened). Manually handling context propagation is error prone, tedious and runs the risk creating gaps in the trace record. This is where Open Liberty and Microprofile can help. When using the JAX-RS REST client alongside Microprofile OpenTracing, spans and request errors are sent to the trace collector, and header-based trace ID propagation is handled automatically.
+One of the perhaps confusing areas of Istio is whether and how much an application has to be changed to take advantage of the distributed tracing support.  If you install the standard "Bookinfo" application, you will find that requests are traced and visible in Zipkin or Jaeger.  However, each service has code to [capture and propagate](https://github.com/istio/istio/blob/master/samples/bookinfo/src/details/details.rb#L130-L148) tracing headers. [(See documentation here)](https://istio.io/docs/tasks/telemetry/distributed-tracing/#understanding-what-happened). Manually handling context propagation is error prone, tedious and runs the risk creating gaps in the trace record. This is where Open Liberty and MicroProfile can help. When using the JAX-RS REST client alongside MicroProfile OpenTracing, spans and request errors are sent to the trace collector, and header-based trace ID propagation is handled automatically.
 
 Along with deploying Open Liberty based containers, we also add a Node microservice not using any tracing library. This will demonstrate how to take advantage of Envoy and its understanding of tracing headers to connect its function to the broader request context. 
 
 In this pattern, we'll go through these steps:
 
 1. Installing Istio, enabling tracing and providing access to a dashboard.
-2. Add Microprofile and OpenTracing to OpenLiberty project.
+2. Add MicroProfile and OpenTracing to Open Liberty project.
 3. Run a simple microservice based application and explore a distributed tracing UI.
 4. Investigate application failures using information from distributed tracing.
 
@@ -179,7 +179,7 @@ Before we look at what we get with distributed tracing enabled, here's a screens
 ![notrace](images/macimg/zipkin-notrace-indivspan.png)
 
 
-# Microprofile Open Tracing vs. manual context propagation.
+# MicroProfile Open Tracing vs. manual context propagation.
 
 First, let's take a look at how context propagation is done manually.  Without a tracing library, headers in the Node service need to be copied from input to output to maintain the unified trace context:
 
@@ -199,13 +199,13 @@ First, let's take a look at how context propagation is done manually.  Without a
 
 When viewed in Jaeger or Zipkin, the Node service is still visible among the Java applications, since the traceid is consistent with trace IDs propagated by JAX-RS/mpOpenTracing, allowing it to be placed in context of other services. Every time a network call is made, these headers must be propagated, either manually or through a library that wraps network calls.
 
-# OpenLiberty changes to build OpenLiberty Docker containers that enable trace propagation.
+# Open Liberty changes to build Open Liberty Docker containers that enable trace propagation.
 
-On the OpenLiberty side, we're configuring trace reporting by modifying configuration in `server.xml`. Note that there are no changes in the Java code needed.  Since all REST calls use the JAX-RS client library - `javax.ws.rs.client.Client` and associated classes - new trace spans are sent to the trace collector during each call. The `x-b3-traceid` header is also preserved across calls, allowing non-Liberty services to be part of a unified trace.
+On the Open Liberty side, we're configuring trace reporting by modifying configuration in `server.xml`. Note that there are no changes in the Java code needed.  Since all REST calls use the JAX-RS client library - `javax.ws.rs.client.Client` and associated classes - new trace spans are sent to the trace collector during each call. The `x-b3-traceid` header is also preserved across calls, allowing non-Liberty services to be part of a unified trace.
 
 1. Changes in `server.xml`
 
-We add the `microProfile-2.1`, which brings in the entire suite of Microprofile features, including JAX-RS and mpOpenTracing.  The Zipkin feature provides support for Zipkin compatible trace collector.  With the `opentracingZipkin` parameter, we point Liberty to the tracing collector in Istio. This address is valid for either a Zipkin or Jaeger based Istio installation, as Jaeger natively supports the Zipkin tracing format, and Istio maps its collector address to `zipkin.istio-system:9411`.  This address can be found by checking the startup arguments in any envoy proxy deployment:
+We add the `microProfile-2.1`, which brings in the entire suite of MicroProfile features, including JAX-RS and mpOpenTracing.  The Zipkin feature provides support for Zipkin compatible trace collector.  With the `opentracingZipkin` parameter, we point Liberty to the tracing collector in Istio. This address is valid for either a Zipkin or Jaeger based Istio installation, as Jaeger natively supports the Zipkin tracing format, and Istio maps its collector address to `zipkin.istio-system:9411`.  This address can be found by checking the startup arguments in any envoy proxy deployment:
 
 ```
 $ kubectl describe pod maker-bot-64ffbc7c65-pp9sr | grep -A1 zipkinAddress
@@ -277,7 +277,7 @@ Then, we'll make a single REST call to our service via the ingress IP/port found
 
 `curl 169.55.65.202:31380/instrument-craft-shop/resources/instruments -i -XPOST -H 'count: 1'  -H 'Content-Type: application/json' -d '{"type":"GUITAR", "price":200}'`
 
-Heading over to the dashboard, we'll see a trace that looks like this. Notice that we see the total time for the request (3.5s) and have separate spans for work done in each service.  Because both Microprofile OpenTracing and the Envoy proxy (sidecar container) are sending traces to the collector, spans for both show up and are nearly identical in length, as the proxy adds very little latency to each call. (Since the JAX-RS integration with Microprofile OpenTracing propagates the `x-b3-traceid` header value across network calls, the trace collector is able to combine information from both services.  This is also the reason our Node service (`pipeline-js` in the diagram here) is made part of this collection: even though it's not using an OpenTracing (or any tracing library) for that matter, we're able to see the work in the Node service in the context of the larger request. 
+Heading over to the dashboard, we'll see a trace that looks like this. Notice that we see the total time for the request (3.5s) and have separate spans for work done in each service.  Because both MicroProfile OpenTracing and the Envoy proxy (sidecar container) are sending traces to the collector, spans for both show up and are nearly identical in length, as the proxy adds very little latency to each call. (Since the JAX-RS integration with MicroProfile OpenTracing propagates the `x-b3-traceid` header value across network calls, the trace collector is able to combine information from both services.  This is also the reason our Node service (`pipeline-js` in the diagram here) is made part of this collection: even though it's not using an OpenTracing (or any tracing library) for that matter, we're able to see the work in the Node service in the context of the larger request. 
 
 ![arch](images/macimg/full-span-no-error.png)
 
@@ -319,7 +319,7 @@ The result shows us that the `pipeline-n1` process had an extremely long runtime
 
 ![arch](images/macimg/timeout1.png)
 
-Upstream timeout.  Note the `Logs` is available due to JAX-RS instrumentation through OpenLiberty tracing instrumentation, which is not available directly through Envoy.
+Upstream timeout.  Note the `Logs` is available due to JAX-RS instrumentation through Open Liberty tracing instrumentation, which is not available directly through Envoy.
 
 ![arch](images/macimg/timeout2.png)
 
@@ -365,7 +365,7 @@ In a microservice environment, sometimes, a service isn't ready, or has failed f
 ![4041](images/macimg/404-service-not-started-1.png)
 ![4041](images/macimg/404-service-not-started-2a.png)
 
-The specific error message is available due to Microprofile OpenTracing reporting the error to the trace collector.
+The specific error message is available due to MicroProfile OpenTracing reporting the error to the trace collector.
 
 Error Scenario: run-time application failure
 --------------------------
@@ -386,13 +386,13 @@ If we check the Envoy proxy's span one level above the JAX-RS span, we find the 
 
 In this pattern, we set up a Kubernetes cluster, installed the Istio service mesh, and added tracing instrumentation to our microservice application.
 
-As we saw, Istio mesh adds observability, but it's not completely "free", as applications do need to instrument their code.  We saw how OpenLiberty's Microprofile can simplify implementing end-to-end tracing across a microservice application.  A toolkit like OpenLiberty's Microprofile and JAX-RS that allows automatic span creation reduces the chance that important information is lost due to gaps in recorded traces.
+As we saw, Istio mesh adds observability, but it's not completely "free", as applications do need to instrument their code.  We saw how Open Liberty's MicroProfile can simplify implementing end-to-end tracing across a microservice application.  A toolkit like Open Liberty's MicroProfile and JAX-RS that allows automatic span creation reduces the chance that important information is lost due to gaps in recorded traces.
 
 
 # References
 [Istio.io](https://istio.io/docs/tasks/)
 
-More about OpenLiberty and mpOpenTracing on the [official blog](https://openliberty.io/guides/microprofile-opentracing.html#getting-started)
+More about Open Liberty and mpOpenTracing on the [official blog](https://openliberty.io/guides/microprofile-opentracing.html#getting-started)
 
 # License
 [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0)
