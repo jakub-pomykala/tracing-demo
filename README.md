@@ -42,7 +42,7 @@ After a user sends a POST call into the ingress gateway public IP address, that 
 
 ## Included Components
 - [Istio](https://istio.io/)
-- [IBM Cloud Kubernetes Service](https://console.ng.bluemix.net/docs/containers/cs_ov.html#cs_ov)
+- [IBM Cloud Kubernetes Service](https://cloud.ibm.com/docs/containers?topic=containers-cs_ov#cs_ov)
 - [Jaeger](https://www.jaegertracing.io/)
 
 # Prerequisite
@@ -215,10 +215,10 @@ $ kubectl describe pod maker-bot-64ffbc7c65-pp9sr | grep -A1 zipkinAddress
 
 - server.xml:
 
-```
+```xml
    <featureManager>
       <feature>microProfile-2.1</feature>
-     <feature>usr:opentracingZipkin-0.31</feature>
+      <feature>usr:opentracingZipkin-0.31</feature>
     </featureManager>
 
     <opentracingZipkin host="zipkin.istio-system" port="9411" />
@@ -237,7 +237,7 @@ COPY target/liberty/wlp/usr/extension /opt/ol/wlp/usr/extension/
 
 These sections in the `pom.xml` are necessary to download the zipkin user feature (see the full `pom.xml` here: [link to github])
 
-```
+```xml
     <properties>
         <zipkin.usr.feature>https://github.com/WASdev/sample.opentracing.zipkintracer/releases/download/1.2/liberty-opentracing-zipkintracer-1.2-sample.zip</zipkin.usr.feature>
     </properties>
@@ -245,7 +245,7 @@ These sections in the `pom.xml` are necessary to download the zipkin user featur
 
 And the plugin to download the user feature:
 
-```
+```xml
         <plugin>
           <groupId>com.googlecode.maven-download-plugin</groupId>
           <artifactId>download-maven-plugin</artifactId>
